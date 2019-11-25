@@ -1,0 +1,8 @@
+<StrictConfusionMatrix>
+  <totalPopulation>15</totalPopulation>
+  <overallAccuracy>0.4666666666666667</overallAccuracy>
+  <averageAccuracy>NaN</averageAccuracy>
+  <meanClassificationAccuracy>NaN</meanClassificationAccuracy>
+  <randomAgreementProbability>0.3333333333333333</randomAgreementProbability>
+  <kappa>0.2</kappa>
+</StrictConfusionMatrix>

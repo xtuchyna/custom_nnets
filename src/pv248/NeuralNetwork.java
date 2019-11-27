@@ -3,10 +3,12 @@ package pv248;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Random;
 
 public class NeuralNetwork {
 
 	double learningRate = 0.1;
+	double momentumFactor = 0.2;
 	
 	/**
 	 * Weights are organized in this manner:
@@ -17,27 +19,52 @@ public class NeuralNetwork {
 	 * 
 	 * To access all weights for a neuron of index n in layer l:
 	 * weights.get(l - 1)[n]
+	 * 
+	 * TODO: change this method of storing weights
+	 * i should access them by weigh.get(l)[i][j] which is more easy to understand
+	 * NOTE: well probably does not matter, in backpropagation it would be other way around then
 	 */
-	ArrayList<double[][]> weights;
-	ArrayList<double[][]> gradients;
+	ArrayList<double[][]> weights = new ArrayList<double[][]>();
 	
-	ArrayList<Neuron[]> layers;
+	ArrayList<double[][]> prevGradients = new ArrayList<double[][]>();
+	ArrayList<double[][]> gradients = new ArrayList<double[][]>();
+	
+	ArrayList<Neuron[]> layers = new ArrayList<Neuron[]>();
 	
 	public NeuralNetwork(int[] layerScheme) {
 		generateNetwork(layerScheme);
 		generateWeights(layerScheme);
 	}
 	
+	public void train(int numOfEpochs) {
+		for(int epoch = 0; epoch < numOfEpochs; epoch++) {
+			gradientDescent();
+			double err = meanSquareError();
+			System.out.println("Epoch number: " + epoch + ". Error function: " + err );
+		}
+	}
+	
+	public void train() {
+		int epoch = 0;
+		while(meanSquareError() > 0.01){
+			gradientDescent();
+			double err = meanSquareError();
+			System.out.println("Epoch number: " + epoch + ". Error function: " + err );
+			epoch++;
+		}
+	}
+	
 	public void generateWeights(int[] layerScheme) {
-		
+		Random rand = new Random();
 		// generating weights for each 'inter-connection' of layers
 		for(int i = 0; i < layerScheme.length - 1; i++) {
 			double[][] curWeight = new double[layerScheme[i]][layerScheme[i+1]];
 			double[][] weightGradient = new double[layerScheme[i]][layerScheme[i+1]];
+			double[][] prevWeightGradient = new double[layerScheme[i]][layerScheme[i+1]];
 			
 			for(int neuron = 0; neuron < curWeight.length; neuron++) {
 				for(int nextNeuron = 0; nextNeuron < curWeight[neuron].length; nextNeuron++) {
-					curWeight[neuron][nextNeuron] = 0.5;
+					curWeight[neuron][nextNeuron] = rand.nextGaussian();
 					weightGradient[neuron][nextNeuron] = 0;
 				}
 			}
@@ -47,6 +74,7 @@ public class NeuralNetwork {
 			 */
 			this.weights.add(curWeight);
 			this.gradients.add(weightGradient);
+			this.prevGradients.add(prevWeightGradient);
 		}
 	}
 
@@ -54,7 +82,11 @@ public class NeuralNetwork {
 	public Neuron[] generateLayer(int size) {
 		Neuron[] layer = new Neuron[size];
 		for(int i = 0; i < layer.length; i++) {
-			layer[i] = new Neuron();
+			if(i == 0) {
+				layer[i] = new Neuron(true);
+			} else {
+				layer[i] = new Neuron();
+			}
 		}
 		return layer;
 	}
@@ -74,15 +106,23 @@ public class NeuralNetwork {
 	 */
 	public double compute(double[] inputTuple) {
 		//input neurons are computed differently
+		Neuron[] inputLayer = this.layers.get(0); 
 		for(int i = 0; i < inputTuple.length; i++) {
-			this.layers.get(0)[i].refreshInnerPotential(inputTuple[i]);
+			inputLayer[i].innerPotential = inputTuple[i];
 		}
 		
+		//hidden and output neurons
 		for(int layerIndex = 1; layerIndex < this.layers.size(); layerIndex++) {
 			Neuron[] curLayer = this.layers.get(layerIndex);
+			
 			for(int neuronIndex = 0; neuronIndex < curLayer.length; neuronIndex++) {
 				
-				curLayer[neuronIndex].refreshInnerPotential(sumInputs(neuronIndex, layerIndex-1));
+				double[][] giverLayer = this.weights.get(layerIndex-1);
+				double sum = 0;
+				for(int weightGiver = 0; weightGiver < giverLayer.length; weightGiver++) {
+					sum += giverLayer[weightGiver][neuronIndex] * this.layers.get(layerIndex-1)[weightGiver].activationFunction();
+				}
+				curLayer[neuronIndex].innerPotential = sum;
 			}
 		}
 
@@ -93,43 +133,33 @@ public class NeuralNetwork {
 		return this.layers.get(this.layers.size()-1)[0].activationFunction();
 	}
 	
-	public double sumInputs(int neuronIndex, int prevLayerIndex) {
-		double sum = 0;
-		double prevLayer[][] = this.weights.get(prevLayerIndex);
-
-		for(double prevNeuron[] : prevLayer) {
-			sum += prevNeuron[neuronIndex];
-		}
-		return sum;
-	}
-	
 	public static final double TAU_XOR[][][] = {
-			{ {0,0}, {0} },
 			{ {0,1}, {1} },
+			{ {0,0}, {0} },
 			{ {1,0}, {1} },
 			{ {1,1}, {0} }};
-
+			
 	/**
 	 * computes log likelihood and then returns cross entropy
 	 * cross entropy = -ll
 	 */
-	public double crossEntropy() {
-		double acc = 0;
-		for(double[][] trainExample : TAU_XOR) {
-			double expectedOutput = trainExample[1][0];		ArrayList<double[][]> weightGradients = new ArrayList<double[][]>();
-
-			double computedOutput = compute(trainExample[0]);
-			
-			acc += expectedOutput * Math.log(computedOutput) + (1 - expectedOutput) * Math.log(1 - computedOutput); 
-		}
-		
-		return -acc;
-	}
-
-	public double crossEntropyDerivativeWRT(int output) {
-		
-		return 0;
-	}
+//	public double crossEntropy() {
+//		double acc = 0;
+//		for(double[][] trainExample : TAU_XOR) {
+//			double expectedOutput = trainExample[1][0];		ArrayList<double[][]> weightGradients = new ArrayList<double[][]>();
+//
+//			double computedOutput = compute(trainExample[0]);
+//			
+//			acc += expectedOutput * Math.log(computedOutput) + (1 - expectedOutput) * Math.log(1 - computedOutput); 
+//		}
+//		
+//		return -acc;
+//	}
+//
+//	public double crossEntropyDerivativeWRT(int output) {
+//		
+//		return 0;
+//	}
 
 	
 	public double meanSquareError() {
@@ -141,77 +171,92 @@ public class NeuralNetwork {
 			acc += Math.pow((computedOutput - expectedOutput), 2); 
 		}
 		
-		return 1/2 * acc; 
+		return acc/2; 
 	}
 	
 	
 	public double meanSquareErrorDerivativeWRT(int neuronIndex, int layerIndex, double expectedOutput) {
 		//if the neuron is in the output layer
 		if (layerIndex == this.layers.size()-1) {
-			double derivate = this.layers.get(layerIndex)[neuronIndex].activationFunction() - expectedOutput;;
-			
-			this.layers.get(layerIndex)[neuronIndex].derivativeToErrorWRToutput = derivate;
-			
-			return derivate;
+			return this.layers.get(layerIndex)[neuronIndex].activationFunction() - expectedOutput;
 		}
 		
-		int layerAbove = layerIndex + 1;
-		int sum = 0;
-		for(int neuronAbove = 0; neuronAbove < this.weights.get(layerAbove-1).length; neuronAbove++) {
-			sum += this.layers.get(layerAbove)[neuronAbove].derivativeToErrorWRToutput
-			* this.layers.get(layerAbove)[neuronAbove].activationFunctionDerivative()
-			* this.weights.get(layerIndex - 1)[neuronIndex][neuronAbove];
+		Neuron[] layerAbove = this.layers.get(layerIndex + 1);
+		double sum = 0;
+		for(int neuronAbove = 0; neuronAbove < layerAbove.length; neuronAbove++) {
+			//gradient of neuron from other than output layer is:
+			sum += layerAbove[neuronAbove].derivativeToErrorWRToutput
+					*layerAbove[neuronAbove].activationFunctionDerivative()
+					*this.weights.get(layerIndex)[neuronIndex][neuronAbove];
+			
 		}
-		this.layers.get(layerIndex)[neuronIndex].derivativeToErrorWRToutput = sum;
-		
 		return sum;
 	}
 	
-
-	public static final int WOOSH = 5;
-	public void train() {
-		for(int epoch = 0; epoch < WOOSH; epoch++) {
-			gradientDescent();
+	public void clearAndCopyGradientMatrix(){
+		for(int i = 0; i < this.gradients.size(); i++) {
+			for(int j = 0; j < this.gradients.get(i).length; j++){
+				for(int k = 0; k < this.gradients.get(i)[j].length; k++){
+					this.prevGradients.get(i)[j][k] = this.gradients.get(i)[j][k]; 
+					this.gradients.get(i)[j][k] = 0;
+				}
+			}
 		}
 	}
-	
-	
+
 	public void gradientDescent() {
+		clearAndCopyGradientMatrix();
 
 		//for every example in training set
 		for(double[][] trainingExample : TAU_XOR) {
 			
-			//forwardpass
-			double computedOutput = forwardPass(trainingExample[0]);
+			System.out.println(this.layers);
 			
-			//backwardpass
-			backwardPass(computedOutput);
+			forwardPass(trainingExample[0]);
+			
+			backwardPass(trainingExample[1][0]);
 			
 			//gradient computation and accumulation
-			for(int i = 0; i < this.gradients.size()-1; i++) {
-				double[][] curLayerGradients = this.gradients.get(i);
-				
-				for(int j = 0; j < curLayerGradients.length; j++) {
-					Neuron weightOwner = this.layers.get(i+1)[j];
-					
-					//here the derivative of Ek wrt wji is computed and summed to the Eji
-					curLayerGradients[i][j] += weightOwner.derivativeToErrorWRToutput
-											* weightOwner.activationFunctionDerivative()
-											* weightOwner.activationFunction();
+			for(int weightLayer = 0; weightLayer < this.weights.size(); weightLayer++){
+				for(int i = 0; i < this.weights.get(weightLayer).length; i++){
+					for(int j = 0; j < this.weights.get(weightLayer)[i].length; j++){
+
+						//compute gradient as follows
+						this.gradients.get(weightLayer)[i][j] +=
+										this.layers.get(weightLayer+1)[j].derivativeToErrorWRToutput
+										* this.layers.get(weightLayer+1)[j].activationFunctionDerivative()
+										* this.layers.get(weightLayer)[i].activationFunction();
+						
+					}
+				}
+			}
+			
+
+			//bias gradients
+			for(Neuron[] layer : this.layers) {
+				for(Neuron neuron : layer) {
+					neuron.prevWeightZeroGradient = neuron.weightZeroGradient;
+					neuron.weightZeroGradient += (neuron.derivativeToErrorWRToutput * neuron.activationFunctionDerivative());
+				}
+			}
+			
+		}
+		
+		//weight update
+		for(int weightLayer = 0; weightLayer < this.weights.size(); weightLayer++){
+			for(int i = 0; i < this.weights.get(weightLayer).length; i++){
+				for(int j = 0; j < this.weights.get(weightLayer)[i].length; j++){
+					this.weights.get(weightLayer)[i][j] += (-learningRate * this.gradients.get(weightLayer)[i][j])
+														 + (-learningRate * this.momentumFactor * this.prevGradients.get(weightLayer)[i][j]);
 				}
 			}
 		}
 		
-		for(int interLayer = 0; interLayer < this.weights.size()-1; interLayer++) {
-			double[][] curInterLayerWeights = this.weights.get(interLayer); 
-
-			for(int weightOwner = 0; weightOwner < this.layers.get(interLayer+1).length; weightOwner++) {
-
-				for(int weightGiver = 0; weightGiver < curInterLayerWeights.length; weightGiver++) {
-					
-					//changing each weight
-					this.weights.get(interLayer)[weightGiver][weightOwner] += -learningRate*this.gradients.get(interLayer)[weightGiver][weightOwner];
-				}
+		//bias weight updates
+		for(Neuron[] layer : this.layers) { 
+			for(Neuron neuron : layer) {
+				neuron.biasWeight += (-learningRate * neuron.weightZeroGradient)
+									+(-learningRate * this.momentumFactor * neuron.weightZeroGradient);
 			}
 		}
 		
@@ -231,7 +276,7 @@ public class NeuralNetwork {
 	 * @param expectedOutput
 	 */
 	public void backwardPass(double expectedOutput) {
-		for(int layerIndex = 0;  layerIndex < this.layers.size(); layerIndex++) {
+		for(int layerIndex = this.layers.size()-1;  layerIndex >= 0; layerIndex--) {
 			Neuron[] curLayer = this.layers.get(layerIndex);
 			
 			for(int neuronIndex = 0; neuronIndex < curLayer.length; neuronIndex++) {

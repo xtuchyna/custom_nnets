@@ -6,9 +6,11 @@ import java.util.Collection;
 public class Neuron {
 
 	double innerPotential = 0;
-	double biasWeight;
+	double biasWeight = 0;
 	double derivativeToErrorWRToutput;
-	
+	double weightZeroGradient = 0;
+	double prevWeightZeroGradient = 0;
+	boolean isInputNeuron = false;
 	
 //	Collection<Neuron> inputs;
 	
@@ -22,18 +24,43 @@ public class Neuron {
 	public Neuron() {
 		
 	}
+	
+	public Neuron(boolean isInput) {
+		this.isInputNeuron = isInput;
+	}
 
 	public double activationFunction() {
-		return 1 / (1 + Math.exp(-innerPotential));
+//		if(isInputNeuron) {
+//			return innerPotential;
+//		}
+		return 1 / (1 + Math.exp(-(innerPotential+biasWeight)));
 	}
 
 
 	public double activationFunctionDerivative() {
+//		if(isInputNeuron) {
+//			return 1;
+//		}
 		return activationFunction()*(1 - activationFunction());
 	}
 	
-	public void refreshInnerPotential(double[] outputs, double[] weights) {
-		
+
+	public void accumulateWeightWithInputToInnerPotential(double weight, double input) {
+		this.innerPotential += weight * input;
+	}
+
+	/**
+	 * Used only for INPUT NEURONS
+	 * @param input
+	 */
+	public void refreshInnerPotential(double input) {
+		this.innerPotential += input;
+	}
+	
+	public String toString() {
+		return String.join("\n", "innPot:" + String.valueOf(this.innerPotential),
+								"bias:" + String.valueOf(this.biasWeight),
+								"dEk/dy:" + String.valueOf(this.derivativeToErrorWRToutput)) + "\n\n";
 	}
 	
 	/**

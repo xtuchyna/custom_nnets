@@ -6,11 +6,12 @@ import java.util.Collection;
 public class Neuron {
 
 	double innerPotential = 0;
-	double biasWeight = 0;
+	double biasWeight = 1;
 	double derivativeToErrorWRToutput;
 	double weightZeroGradient = 0;
 	double prevWeightZeroGradient = 0;
-	boolean isInputNeuron = false;
+	boolean isOutput = false;
+	Neuron[] lastLayer;
 	
 //	Collection<Neuron> inputs;
 	
@@ -21,25 +22,30 @@ public class Neuron {
 	/**
 	 * Constructor for input Neurons
 	 */
-	public Neuron() {
-		
-	}
 	
-	public Neuron(boolean isInput) {
-		this.isInputNeuron = isInput;
+	public Neuron(boolean isOutput) {
+		this.isOutput = isOutput;
 	}
 
+	public double softmaxActivation() {
+		double expSum = 0;
+		for(Neuron neuron : lastLayer) {
+			expSum += Math.exp(neuron.innerPotential);
+		}
+		return Math.exp(innerPotential) / expSum;
+	}
+	
 	public double activationFunction() {
-//		if(isInputNeuron) {
-//			return innerPotential;
-//		}
+		if(isOutput) {
+			return softmaxActivation();
+		}
 		return 1 / (1 + Math.exp(-(innerPotential+biasWeight)));
 	}
 
 
 	public double activationFunctionDerivative() {
-//		if(isInputNeuron) {
-//			return 1;
+//		if(isOutput) {
+//			return ;
 //		}
 		return activationFunction()*(1 - activationFunction());
 	}

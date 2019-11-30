@@ -6,7 +6,7 @@ import java.util.Collection;
 public class Neuron {
 
 	double innerPotential = 0;
-	double biasWeight = 1;
+	double biasWeight = 0;
 	double derivativeToErrorWRToutput;
 	double weightZeroGradient = 0;
 	double prevWeightZeroGradient = 0;
@@ -39,7 +39,7 @@ public class Neuron {
 		if(isOutput) {
 			return softmaxActivation();
 		}
-		return 1 / (1 + Math.exp(-(innerPotential+biasWeight)));
+		return 1 / (1 + Math.exp(-(innerPotential)));
 	}
 
 
@@ -55,13 +55,6 @@ public class Neuron {
 		this.innerPotential += weight * input;
 	}
 
-	/**
-	 * Used only for INPUT NEURONS
-	 * @param input
-	 */
-	public void refreshInnerPotential(double input) {
-		this.innerPotential += input;
-	}
 	
 	public String toString() {
 		return String.join("\n", "innPot:" + String.valueOf(this.innerPotential),

@@ -4,12 +4,21 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 
 public class NeuralNetwork {
 
-	double learningRate = 0.1;
-	double momentumFactor = 0.2;
+	/**
+	 * HYPER-PARAMETERS
+	 */
+	double learningRate = 0.01;
+	double momentumFactor = 0.8;
+	int miniBatchSize = 64;
+	boolean useCrossEntropy = false;
+	
+	double decay = learningRate / Main.MNIST_TRAIN_DATASET_SIZE;
+//	double initiallearningRate = learningRate;
 	
 	/**
 	 * Weights are organized in this manner:
@@ -32,40 +41,71 @@ public class NeuralNetwork {
 	
 	ArrayList<Neuron[]> layers = new ArrayList<Neuron[]>();
 	
-	double[][] inputBatch = new double[Main.MINI_BATCH_SIZE][];
-	int[] labelBatch = new int[Main.MINI_BATCH_SIZE];
+	int[][] inputs;
+	int[][] outputs;
+	int[] shuffledIndices;
 	
 	public NeuralNetwork(int[] layerScheme) {
 		generateNetwork(layerScheme);
 		generateWeights(layerScheme);
 	}
 	
-	public void accumulateMiniBatch(int[] inputs, int label, int i) {
-		double[] convertedDoubles = new double[inputs.length];
-		for(int j = 0; j < inputs.length; j++) {
-			convertedDoubles[j] = inputs[j];
+	public void loadDataset(String inputsFilePath, String outputsFilePath, int datasetSize) {
+		this.inputs = new int[datasetSize][];
+		this.outputs = new int[datasetSize][];
+		
+		this.inputs = DatasetLoader.readCsv(inputsFilePath, datasetSize);
+		this.outputs = DatasetLoader.readCsv(outputsFilePath, datasetSize);
+		
+		this.shuffledIndices = new int[datasetSize];
+		for(int i = 0; i < shuffledIndices.length; i++) {
+			shuffledIndices[i] = i;
 		}
-		inputBatch[i] = convertedDoubles;
-		labelBatch[i] = label;
+		fisherYatesShuffle(shuffledIndices);
 	}
+	
+	private void fisherYatesShuffle(int[] ar) {
+		Random rnd = ThreadLocalRandom.current();
+		for (int i = ar.length - 1; i > 0; i--) {
+			int index = rnd.nextInt(i + 1);
+			// Simple swap
+			int a = ar[index];
+			ar[index] = ar[i];
+			ar[i] = a;
+		}
+	}
+	
+//	public void accumulateMiniBatch(int[] inputs, int label, int i) {
+//		double[] convertedDoubles = new double[inputs.length];
+//		for(int j = 0; j < inputs.length; j++) {
+//			convertedDoubles[j] = inputs[j];
+//		}
+//		inputs[i] = convertedDoubles;
+//		labels[i] = label;
+//	}
 	
 	public void train(int numOfEpochs) {
-		for(int epoch = 0; epoch < numOfEpochs; epoch++) {
-			gradientDescent();
-			double err = meanSquareError();
-			System.out.println("Epoch number: " + epoch + ". Error function: " + err );
+		
+		int[] trainingIndices = new int[this.miniBatchSize];
+		int curIndex = 0;
+		for(int i = 0; i < inputs.length; i++) {
+			trainingIndices[curIndex] = this.shuffledIndices[i];
+			curIndex += 1;
+			if (curIndex == this.miniBatchSize) {
+				for(int epoch = 0; epoch < numOfEpochs; epoch++) {
+					gradientDescent(trainingIndices);
+					clearAndCopyGradientMatrix();
+					double err = errorFunction(trainingIndices);
+					System.out.print("(" + i + "-th input)");
+					System.out.println("Epoch number: " + epoch + ". Error function: " + err );
+				}
+				this.learningRate *= (1 / (1 + this.decay * i));
+				System.out.println(" [LR: " + this.learningRate + "]");
+				curIndex = 0;
+			}
 		}
 	}
 	
-	public void train() {
-		int epoch = 10;
-		while(meanSquareError() > 0.01){
-			gradientDescent();
-			double err = meanSquareError();
-			System.out.println("Epoch number: " + epoch + ". Error function: " + err );
-			epoch++;
-		}
-	}
 	
 	public void generateWeights(int[] layerScheme) {
 		Random rand = new Random();
@@ -123,7 +163,7 @@ public class NeuralNetwork {
 	 * @param inputTuple
 	 * @return
 	 */
-	public double compute(double[] inputTuple) {
+	public double compute(int[] inputTuple) {
 		//input neurons are computed differently
 		Neuron[] inputLayer = this.layers.get(0); 
 		for(int i = 0; i < inputTuple.length; i++) {
@@ -141,7 +181,7 @@ public class NeuralNetwork {
 				for(int weightGiver = 0; weightGiver < giverLayer.length; weightGiver++) {
 					sum += giverLayer[weightGiver][neuronIndex] * this.layers.get(layerIndex-1)[weightGiver].activationFunction();
 				}
-				curLayer[neuronIndex].innerPotential = sum;
+				curLayer[neuronIndex].innerPotential = sum + curLayer[neuronIndex].biasWeight;
 			}
 		}
 
@@ -162,55 +202,67 @@ public class NeuralNetwork {
 		}
 		return maximumIndex;
 	}
-	
 			
-	/**
-	 * computes log likelihood and then returns cross entropy
-	 * cross entropy = -ll
-	 */
-//	public double crossEntropy() {
-//		double acc = 0;
-//		for(double[][] trainExample : TAU_XOR) {
-//			double expectedOutput = trainExample[1][0];		ArrayList<double[][]> weightGradients = new ArrayList<double[][]>();
-//
-//			double computedOutput = compute(trainExample[0]);
-//			
-//			acc += expectedOutput * Math.log(computedOutput) + (1 - expectedOutput) * Math.log(1 - computedOutput); 
-//		}
-//		
-//		return -acc;
-//	}
-//
-//	public double crossEntropyDerivativeWRT(int output) {
-//		
-//		return 0;
-//	}
-
+	public double errorFunction(int[] miniBatchIndices) {
+		if (useCrossEntropy) {
+			return categoricalCrossEntropy(miniBatchIndices);
+		}
+		return meanSquareError(miniBatchIndices);
+	}
 	
-	public double meanSquareError() {
+	public double categoricalCrossEntropy(int[] miniBatchIndices) {
 		double acc = 0;
-		for(int i = 0; i < this.inputBatch.length; i++) {
-			double expectedOutput = this.labelBatch[i];
-			double computedOutput = compute(this.inputBatch[i]);
+		for(int i : miniBatchIndices) {
+			
+			double computedOutput = compute(this.inputs[i]);
+			double expectedOutput = this.outputs[i][0];
+
+			double outputLayerSum = 0;
+			Neuron[] lastLayer = this.layers.get(this.layers.size() - 1);
+
+			for(Neuron neuron : lastLayer) {
+
+				outputLayerSum += expectedOutput * Math.log(computedOutput);
+			}
+			
+			acc += outputLayerSum;
+		}
+		return (-1) * acc /miniBatchIndices.length;
+	}
+	
+	public double meanSquareError(int[] miniBatchIndices) {
+		double acc = 0;
+		for(int i : miniBatchIndices) {
+			double expectedOutput = this.outputs[i][0];
+			double computedOutput = compute(this.inputs[i]);
 			
 			acc += Math.pow((computedOutput - expectedOutput), 2); 
 		}
 		
-		return acc/2; 
+		return acc/miniBatchIndices.length; 
 	}
 	
 	
-	public double meanSquareErrorDerivativeWRT(int neuronIndex, int layerIndex, double expectedOutput) {
+	public double errorFunctionDerivativeWRToutput(int neuronIndex, int layerIndex, double expectedOutput) {
 		//if the neuron is in the output layer
 		if (layerIndex == this.layers.size()-1) {
 			
 			double[] oneHotVector = new double[Main.MNIST_NUM_OF_LABELS];
 			oneHotVector[(int)expectedOutput] = 1;
+			
+			double outPut = this.layers.get(layerIndex)[neuronIndex].activationFunction();
+			
+			if(useCrossEntropy) {
+				return (-1) * oneHotVector[neuronIndex] / outPut;
+			}
+			//else MSE
+			return outPut - oneHotVector[neuronIndex];
+
 			//TODO dunno if this is a good idea
 			//should init one hot vecs way before probably
-			return this.layers.get(layerIndex)[neuronIndex].activationFunction() - oneHotVector[neuronIndex];
 		}
 		
+		//if the neuron is not in the output layer
 		Neuron[] layerAbove = this.layers.get(layerIndex + 1);
 		double sum = 0;
 		for(int neuronAbove = 0; neuronAbove < layerAbove.length; neuronAbove++) {
@@ -223,6 +275,10 @@ public class NeuralNetwork {
 		return sum;
 	}
 	
+	/**
+	 * Used both for cleaning the old gradience matrix
+	 * and copying it for momentum
+	 */
 	public void clearAndCopyGradientMatrix(){
 		for(int i = 0; i < this.gradients.size(); i++) {
 			for(int j = 0; j < this.gradients.get(i).length; j++){
@@ -234,17 +290,17 @@ public class NeuralNetwork {
 		}
 	}
 
-	public void gradientDescent() {
+	public void gradientDescent(int[] miniBatchIndices) {
 		clearAndCopyGradientMatrix();
 
 		//for every example in training set
-		for(int inputIndex = 0; inputIndex < this.inputBatch.length; inputIndex++) {
+		for(int miniBatchIndex : miniBatchIndices) {
 			
 //			System.out.println(this.layers);
 			
-			forwardPass(this.inputBatch[inputIndex]);
+			forwardPass(this.inputs[miniBatchIndex]);
 			
-			backwardPass(this.labelBatch[inputIndex]);
+			backwardPass(this.outputs[miniBatchIndex][0]);
 			
 			//gradient computation and accumulation
 			for(int weightLayer = 0; weightLayer < this.weights.size(); weightLayer++){
@@ -295,7 +351,7 @@ public class NeuralNetwork {
 	
 	
 	
-	public double forwardPass(double[] trainingInput) {
+	public double forwardPass(int[] trainingInput) {
 		return compute(trainingInput);
 	}
 	
@@ -305,12 +361,12 @@ public class NeuralNetwork {
 	 * 
 	 * @param expectedOutput
 	 */
-	public void backwardPass(double expectedOutput) {
+	public void backwardPass(int expectedOutput) {
 		for(int layerIndex = this.layers.size()-1;  layerIndex >= 0; layerIndex--) {
 			Neuron[] curLayer = this.layers.get(layerIndex);
 			
 			for(int neuronIndex = 0; neuronIndex < curLayer.length; neuronIndex++) {
-				curLayer[neuronIndex].derivativeToErrorWRToutput = meanSquareErrorDerivativeWRT(neuronIndex, layerIndex, expectedOutput);
+				curLayer[neuronIndex].derivativeToErrorWRToutput = errorFunctionDerivativeWRToutput(neuronIndex, layerIndex, expectedOutput);
 			}
 		}
 	}

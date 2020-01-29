@@ -1,4 +1,5 @@
-module add maven
+#!/usr/bin/env bash
+module add maven-3.5 
 mvn clean install
 mvn package
 java -jar ./target/tuchyna-mnist-mlp-jar-with-dependencies.jar

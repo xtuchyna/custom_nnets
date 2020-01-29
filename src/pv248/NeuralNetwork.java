@@ -18,14 +18,14 @@ public class NeuralNetwork {
 	boolean useCrossEntropy = false;
 	
 	double currentValidateSuccesRatio = 0;
+	int successCheckpoint = 1000;
 	
 	double decay = learningRate / (Main.MNIST_TRAIN_DATASET_SIZE);
 	
 	public static int VALIDATION_SET_LENGTH = 10000;
 	
-	public static int MAGIC = 30;
+	public static int RELU_REDUCER = 30;
 	
-	public int SUCESS_CHECK_POINT = 1000;
 
 	/**
 	 * Weights are organized in this manner:
@@ -82,15 +82,6 @@ public class NeuralNetwork {
 		}
 	}
 	
-//	public void accumulateMiniBatch(int[] inputs, int label, int i) {
-//		double[] convertedDoubles = new double[inputs.length];
-//		for(int j = 0; j < inputs.length; j++) {
-//			convertedDoubles[j] = inputs[j];
-//		}
-//		inputs[i] = convertedDoubles;
-//		labels[i] = label;
-//	}
-	
 	public double errorToValidationSet() {
 		double succ = 0;
 		for(int i = this.inputs.length - VALIDATION_SET_LENGTH;  i < this.inputs.length; i++) {
@@ -115,10 +106,7 @@ public class NeuralNetwork {
 				for(int epoch = 0; epoch < numOfEpochs; epoch++) {
 					gradientDescent(trainingIndices);
 					clearAndCopyGradientMatrix();
-//					double err = errorFunction(trainingIndices);
-//					System.out.print("(" + i + "-th input)");
-//					System.out.println("Epoch number: " + epoch + ". Error function: " + err );
-					System.out.print("(" + i+1 + "-th input)");
+					System.out.print("(" + String.valueOf(i+1) + "-th input)");
 					System.out.println("Epoch number: " + epochNumber);
 				}
 				this.learningRate *= (1 / (1 + this.decay * i));
@@ -126,18 +114,10 @@ public class NeuralNetwork {
 				curIndex = 0;
 			}
 			
-			if (epochNumber > 1 && i % this.SUCESS_CHECK_POINT == 0) {
+			if (epochNumber >= 3 && i % this.successCheckpoint == 0) {
 				currentValidateSuccesRatio = errorToValidationSet();
 				System.out.println("Current accuracy on validation set:" + currentValidateSuccesRatio*100 +"%");
 			}
-			
-//			if (currentValidateSuccesRatio > 0.9) {
-//				this.learningRate *= (1 / (1 + this.decay * i / 20));
-//			} else if (currentValidateSuccesRatio > 0.80) {
-//				this.learningRate *= (1 / (1 + this.decay * i / 40));
-//			} else if (currentValidateSuccesRatio > 0.93) {
-//				this.learningRate *= (1 / (1 + this.decay * i / 10));
-//			}
 			
 			if(i == inputs.length-VALIDATION_SET_LENGTH-1) {
 				i = 0;
@@ -145,11 +125,6 @@ public class NeuralNetwork {
 				currentValidateSuccesRatio = errorToValidationSet();
 				System.out.println("Current accuracy on validation set:" + currentValidateSuccesRatio*100 +"%");
 			}
-			
-//			if(currentValidateSuccesRatio >= 0.85) {
-//				NeuralNetwork.MAGIC = 1;
-//				this.learningRate = 0.0005;
-//			}
 			
 			if(currentValidateSuccesRatio >= 0.95) {
 				break;

@@ -1,4 +1,4 @@
 module add maven
 mvn clean install
-mnv package
+mvn package
 java -jar ./target/tuchyna-mnist-mlp-jar-with-dependencies.jar

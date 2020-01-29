@@ -1,1 +1,4 @@
-this is RUN script lol
+module add maven
+mvn clean install
+mnv package
+java -jar ./target/tuchyna-mnist-mlp-jar-with-dependencies.jar

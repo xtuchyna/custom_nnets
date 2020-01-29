@@ -12,14 +12,21 @@ public class NeuralNetwork {
 	/**
 	 * HYPER-PARAMETERS
 	 */
-	double learningRate = 0.01;
+	double learningRate = 0.003;
 	double momentumFactor = 0.8;
-	int miniBatchSize = 64;
+	int miniBatchSize = 200; 
 	boolean useCrossEntropy = false;
 	
-	double decay = learningRate / Main.MNIST_TRAIN_DATASET_SIZE;
-//	double initiallearningRate = learningRate;
+	double currentValidateSuccesRatio = 0;
 	
+	double decay = learningRate / (Main.MNIST_TRAIN_DATASET_SIZE);
+	
+	public static int VALIDATION_SET_LENGTH = 10000;
+	
+	public static int MAGIC = 30;
+	
+	public int SUCESS_CHECK_POINT = 1000;
+
 	/**
 	 * Weights are organized in this manner:
 	 * weights.get( <index of layer> )[ <index of a neuron which gives output> ][ <index of a neuron which receives the output]
@@ -84,24 +91,68 @@ public class NeuralNetwork {
 //		labels[i] = label;
 //	}
 	
+	public double errorToValidationSet() {
+		double succ = 0;
+		for(int i = this.inputs.length - VALIDATION_SET_LENGTH;  i < this.inputs.length; i++) {
+			int expectedOutput = this.outputs[this.shuffledIndices[i]][0];
+			int computedOutput = (int)compute(this.inputs[this.shuffledIndices[i]]);
+			if (expectedOutput == computedOutput) {
+				succ += 1;
+			}
+		}
+		return succ / VALIDATION_SET_LENGTH;
+	}
+	
 	public void train(int numOfEpochs) {
+		int epochNumber = 1;
 		
 		int[] trainingIndices = new int[this.miniBatchSize];
 		int curIndex = 0;
-		for(int i = 0; i < inputs.length; i++) {
+		for(int i = 0; i < inputs.length - VALIDATION_SET_LENGTH; i++) {
 			trainingIndices[curIndex] = this.shuffledIndices[i];
 			curIndex += 1;
 			if (curIndex == this.miniBatchSize) {
 				for(int epoch = 0; epoch < numOfEpochs; epoch++) {
 					gradientDescent(trainingIndices);
 					clearAndCopyGradientMatrix();
-					double err = errorFunction(trainingIndices);
-					System.out.print("(" + i + "-th input)");
-					System.out.println("Epoch number: " + epoch + ". Error function: " + err );
+//					double err = errorFunction(trainingIndices);
+//					System.out.print("(" + i + "-th input)");
+//					System.out.println("Epoch number: " + epoch + ". Error function: " + err );
+					System.out.print("(" + i+1 + "-th input)");
+					System.out.println("Epoch number: " + epochNumber);
 				}
 				this.learningRate *= (1 / (1 + this.decay * i));
 				System.out.println(" [LR: " + this.learningRate + "]");
 				curIndex = 0;
+			}
+			
+			if (epochNumber > 1 && i % this.SUCESS_CHECK_POINT == 0) {
+				currentValidateSuccesRatio = errorToValidationSet();
+				System.out.println("Current accuracy on validation set:" + currentValidateSuccesRatio*100 +"%");
+			}
+			
+//			if (currentValidateSuccesRatio > 0.9) {
+//				this.learningRate *= (1 / (1 + this.decay * i / 20));
+//			} else if (currentValidateSuccesRatio > 0.80) {
+//				this.learningRate *= (1 / (1 + this.decay * i / 40));
+//			} else if (currentValidateSuccesRatio > 0.93) {
+//				this.learningRate *= (1 / (1 + this.decay * i / 10));
+//			}
+			
+			if(i == inputs.length-VALIDATION_SET_LENGTH-1) {
+				i = 0;
+				epochNumber++;
+				currentValidateSuccesRatio = errorToValidationSet();
+				System.out.println("Current accuracy on validation set:" + currentValidateSuccesRatio*100 +"%");
+			}
+			
+//			if(currentValidateSuccesRatio >= 0.85) {
+//				NeuralNetwork.MAGIC = 1;
+//				this.learningRate = 0.0005;
+//			}
+			
+			if(currentValidateSuccesRatio >= 0.95) {
+				break;
 			}
 		}
 	}
@@ -130,25 +181,29 @@ public class NeuralNetwork {
 			this.prevGradients.add(prevWeightGradient);
 		}
 	}
-
 	
-	public Neuron[] generateLayer(int size, boolean isLast) {
+	
+	public Neuron[] generateLayer(int size, Class<? extends Neuron> neuronType) {
 		Neuron[] layer = new Neuron[size];
 		for(int i = 0; i < layer.length; i++) {
-			layer[i] = new Neuron(isLast);
+			if (neuronType == InputNeuron.class) {
+				layer[i] = new InputNeuron();
+			} else if (neuronType == HiddenNeuron.class) {
+				layer[i] = new HiddenNeuron();
+			} else if (neuronType == OutputNeuron.class) {
+				layer[i] = new OutputNeuron();
+			}
 		}
-		
 		return layer;
 	}
 	
 	public void generateNetwork(int[] layerScheme) {
-		boolean isLast = false;
-		for(int i = 0; i < layerScheme.length; i++) {
-			if(i == layerScheme.length-1) {
-				isLast = true;
-			}
-			this.layers.add(generateLayer(layerScheme[i], isLast));
+		
+		this.layers.add(generateLayer(layerScheme[0], InputNeuron.class));
+		for(int i = 1; i < layerScheme.length-1; i++) {
+			this.layers.add(generateLayer(layerScheme[i], HiddenNeuron.class));
 		}
+		this.layers.add(generateLayer(layerScheme[layerScheme.length-1], OutputNeuron.class));
 		
 		Neuron[] lastLayer = this.layers.get(this.layers.size()-1);
 		for(Neuron neuron : lastLayer) {
@@ -167,7 +222,7 @@ public class NeuralNetwork {
 		//input neurons are computed differently
 		Neuron[] inputLayer = this.layers.get(0); 
 		for(int i = 0; i < inputTuple.length; i++) {
-			inputLayer[i].innerPotential = inputTuple[i];
+			inputLayer[i].innerPotential = inputTuple[i] / 255.0;
 		}
 		
 		//hidden and output neurons
@@ -177,7 +232,7 @@ public class NeuralNetwork {
 			for(int neuronIndex = 0; neuronIndex < curLayer.length; neuronIndex++) {
 				
 				double[][] giverLayer = this.weights.get(layerIndex-1);
-				double sum = 0;
+				double sum = 0.0;
 				for(int weightGiver = 0; weightGiver < giverLayer.length; weightGiver++) {
 					sum += giverLayer[weightGiver][neuronIndex] * this.layers.get(layerIndex-1)[weightGiver].activationFunction();
 				}
@@ -210,6 +265,7 @@ public class NeuralNetwork {
 		return meanSquareError(miniBatchIndices);
 	}
 	
+	@Deprecated
 	public double categoricalCrossEntropy(int[] miniBatchIndices) {
 		double acc = 0;
 		for(int i : miniBatchIndices) {
@@ -239,7 +295,7 @@ public class NeuralNetwork {
 			acc += Math.pow((computedOutput - expectedOutput), 2); 
 		}
 		
-		return acc/miniBatchIndices.length; 
+		return acc / miniBatchIndices.length; 
 	}
 	
 	
@@ -253,7 +309,7 @@ public class NeuralNetwork {
 			double outPut = this.layers.get(layerIndex)[neuronIndex].activationFunction();
 			
 			if(useCrossEntropy) {
-				return (-1) * oneHotVector[neuronIndex] / outPut;
+				return (-1.0) * oneHotVector[neuronIndex] / outPut;
 			}
 			//else MSE
 			return outPut - oneHotVector[neuronIndex];
@@ -264,7 +320,7 @@ public class NeuralNetwork {
 		
 		//if the neuron is not in the output layer
 		Neuron[] layerAbove = this.layers.get(layerIndex + 1);
-		double sum = 0;
+		double sum = 0.0;
 		for(int neuronAbove = 0; neuronAbove < layerAbove.length; neuronAbove++) {
 			//gradient of neuron from other than output layer is:
 			sum += layerAbove[neuronAbove].derivativeToErrorWRToutput
@@ -284,7 +340,7 @@ public class NeuralNetwork {
 			for(int j = 0; j < this.gradients.get(i).length; j++){
 				for(int k = 0; k < this.gradients.get(i)[j].length; k++){
 					this.prevGradients.get(i)[j][k] = this.gradients.get(i)[j][k]; 
-					this.gradients.get(i)[j][k] = 0;
+					this.gradients.get(i)[j][k] = 0.0;
 				}
 			}
 		}

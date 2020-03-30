@@ -12,19 +12,20 @@ public class NeuralNetwork {
 	/**
 	 * HYPER-PARAMETERS
 	 */
-	double learningRate = 0.003;
+	double learningRate = 0.0018;
 	double momentumFactor = 0.8;
 	int miniBatchSize = 200; 
 	boolean useCrossEntropy = false;
 	
 	double currentValidateSuccesRatio = 0;
 	int successCheckpoint = 1000;
+	int checkStartingEpoch = 7;
 	
 	double decay = learningRate / (Main.MNIST_TRAIN_DATASET_SIZE);
 	
 	public static int VALIDATION_SET_LENGTH = 10000;
 	
-	public static int RELU_REDUCER = 30;
+	public static int RELU_REDUCER = 100;
 	
 
 	/**
@@ -99,7 +100,7 @@ public class NeuralNetwork {
 		
 		int[] trainingIndices = new int[this.miniBatchSize];
 		int curIndex = 0;
-		for(int i = 0; i < inputs.length - VALIDATION_SET_LENGTH; i++) {
+		for(int i = 0; i < inputs.length - VALIDATION_SET_LENGTH; ++i) {
 			trainingIndices[curIndex] = this.shuffledIndices[i];
 			curIndex += 1;
 			if (curIndex == this.miniBatchSize) {
@@ -114,13 +115,14 @@ public class NeuralNetwork {
 				curIndex = 0;
 			}
 			
-			if (epochNumber >= 3 && i % this.successCheckpoint == 0) {
+			if (epochNumber >= this.checkStartingEpoch && i % this.successCheckpoint == 0) {
 				currentValidateSuccesRatio = errorToValidationSet();
 				System.out.println("Current accuracy on validation set:" + currentValidateSuccesRatio*100 +"%");
 			}
 			
 			if(i == inputs.length-VALIDATION_SET_LENGTH-1) {
-				i = 0;
+				i = -1;
+				curIndex = 0;
 				epochNumber++;
 				currentValidateSuccesRatio = errorToValidationSet();
 				System.out.println("Current accuracy on validation set:" + currentValidateSuccesRatio*100 +"%");

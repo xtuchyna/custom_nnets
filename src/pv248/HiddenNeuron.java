@@ -5,7 +5,7 @@ public class HiddenNeuron extends Neuron {
 	@Override
 	public double activationFunction() {
 //		return 1 / (1 + Math.exp(-(innerPotential)));
-		return (innerPotential > 0) ? innerPotential  / NeuralNetwork.RELU_REDUCER : 0;
+		return (innerPotential > 0) ? innerPotential  / NeuralNetwork.RELU_REDUCER : 0.0;
 	}
 
 	@Override
